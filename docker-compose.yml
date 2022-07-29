@@ -1,0 +1,66 @@
+version: '3.2'
+services:
+
+    elk:
+        image: elasticsearch:7.17.5
+        ports:
+            - "127.0.0.1:9200:9200"
+        environment:
+            "discovery.type": single-node
+            "bootstrap.memory_lock": "true"
+            ES_JAVA_OPTS: "-Xms1536m -Xmx1536m"
+            # - xpack.security.enabled=true
+            # - ELASTIC_USER = elastic
+            # - ELASTIC_PASSWORD = elastic
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1
+        volumes:
+            - es_data:/usr/share/elasticsearch/data
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+            interval: 3s
+            timeout: 5s
+            retries: 5
+            start_period: 60s      
+    kibana:
+        image: kibana:7.17.5
+        ports:
+            - "127.0.0.1:5601:5601"
+        links:
+            - elk
+        environment:
+            ELASTICSEARCH_URL: http://elk:9200
+            ELASTICSEARCH_HOSTS: http://elk:9200
+            JAVA_OPTS: "-Xms1536m -Xmx1536m"
+            # ELASTICSEARCH_USERNAME: "elastic"
+            # ELASTICSEARCH_PASSWORD: "elastic"
+            
+    redis:
+        image: redis:latest
+        ports:
+            - "127.0.0.1:6379:6379"
+        command: redis-server --port 6379 --save 20 1
+        volumes:
+            - ./redis_data:/data
+            
+    tomcat:
+        image: tomcat:9.0
+        ports:
+            - "8888:8080"
+        links:
+            - redis
+        depends_on:
+            elk:
+                condition: service_healthy
+        volumes: 
+            - ./mt_app_data:/usr/local/tomcat/mt_app_data
+            - ./logs:/usr/local/tomcat/logs
+            - ./webapps:/usr/local/tomcat/webapps
+            - ./conf:/usr/local/tomcat/conf
+
+
+volumes:
+    es_data:
+        driver: local
